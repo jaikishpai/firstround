@@ -2352,6 +2352,7 @@ function CandidateSession() {
       )}
       <div className="actions">
         <button
+          type="button"
           onClick={() => setShowSubmitConfirm(true)}
           disabled={submitted || expired}
         >
@@ -2380,7 +2381,7 @@ function CandidateSession() {
       )}
 
       {showSubmitConfirm && (
-        <div className="modal-overlay">
+        <div className="modal-overlay candidate-modal">
           <div className="modal-content">
             <header className="header">
               <h2>Submit Test?</h2>
@@ -2390,8 +2391,17 @@ function CandidateSession() {
               you sure you want to submit your answers?
             </p>
             <div className="actions">
-              <button onClick={handleSubmit}>Submit Test</button>
               <button
+                type="button"
+                onClick={() => {
+                  setShowSubmitConfirm(false);
+                  handleSubmit();
+                }}
+              >
+                Submit Test
+              </button>
+              <button
+                type="button"
                 className="ghost"
                 onClick={() => setShowSubmitConfirm(false)}
               >

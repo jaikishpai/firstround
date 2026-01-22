@@ -398,6 +398,10 @@ textarea,
   bottom: auto;
 }
 
+.candidate-modal {
+  z-index: 80;
+}
+
 .checkbox {
   display: flex;
   gap: 6px;
@@ -622,8 +626,19 @@ button:disabled {
   flex: 1;
 }
 
-.entry-button {
+.candidate-entry-page .entry-button {
   min-width: 140px;
+  background: #0b6fbf;
+  color: #ffffff;
+  border: 1px solid #0b6fbf;
+}
+
+.candidate-entry-page .entry-button:disabled {
+  background: #8fb7dd;
+  border-color: #8fb7dd;
+  color: #ffffff;
+  opacity: 0.85;
+  cursor: not-allowed;
 }
 
 .entry-error {
@@ -656,6 +671,19 @@ button:disabled {
   background: #1b1b1b;
   color: #e5e5e5;
   border-color: #2a2a2a;
+}
+
+.candidate-dark .entry-button {
+  background: #33a3db;
+  border-color: #33a3db;
+  color: #ffffff;
+}
+
+.candidate-dark .entry-button:disabled {
+  background: #4f8fb3;
+  border-color: #4f8fb3;
+  color: #ffffff;
+  opacity: 0.85;
 }
 
 .candidate-dark .subtle {
