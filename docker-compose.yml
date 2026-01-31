@@ -9,6 +9,11 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d qa_platform"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   backend:
     build: ./backend
@@ -20,7 +25,8 @@ services:
       ADMIN_SEED_PASSWORD: ${ADMIN_SEED_PASSWORD:-admin123}
       ALLOW_ORIGINS: ${ALLOW_ORIGINS:-http://localhost:3001,http://localhost:3000}
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     ports:
       - "8000:8000"
 

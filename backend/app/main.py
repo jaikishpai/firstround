@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select, text
+from sqlalchemy.exc import OperationalError
 
 from app.config import settings
 from app.database import Base, engine, get_db
@@ -11,7 +12,7 @@ from app.models import Role, RoleName, User, TestType
 from app.routes import router, get_password_hash, start_sweeper
 
 
-async def init_db():
+async def _init_db_once():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.execute(
@@ -305,6 +306,24 @@ async def init_db():
                 )
                 db.add(admin_user)
                 await db.commit()
+
+
+async def init_db():
+    """
+    Initialize schema + seed data.
+
+    On a fresh Postgres volume, the DB container can be up but not yet ready to accept
+    connections; this retries briefly to avoid failing app startup.
+    """
+    max_attempts = 30
+    for attempt in range(1, max_attempts + 1):
+        try:
+            await _init_db_once()
+            return
+        except (OperationalError, ConnectionRefusedError):
+            if attempt >= max_attempts:
+                raise
+            await asyncio.sleep(min(2.0, 0.2 * attempt))
 
 
 @asynccontextmanager

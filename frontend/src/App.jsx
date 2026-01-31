@@ -91,6 +91,8 @@ function AdminDashboard({ onLogout }) {
   });
   const [successMessage, setSuccessMessage] = useState("");
   const [toastMessage, setToastMessage] = useState("");
+  const [savingQuestionOrder, setSavingQuestionOrder] = useState(false);
+  const [questionOrderDirty, setQuestionOrderDirty] = useState(false);
   const [monitoring, setMonitoring] = useState(null);
   const [error, setError] = useState("");
   const [filters, setFilters] = useState({
@@ -279,11 +281,13 @@ function AdminDashboard({ onLogout }) {
   const loadQuestionSetQuestions = async (setId) => {
     if (!setId) {
       setQuestionSetQuestions([]);
+      setQuestionOrderDirty(false);
       return;
     }
     try {
       const data = await apiFetch(`/admin/question-sets/${setId}/questions`);
       setQuestionSetQuestions(data);
+      setQuestionOrderDirty(false);
     } catch (err) {
       setError(err.message);
     }
@@ -357,6 +361,10 @@ function AdminDashboard({ onLogout }) {
 
   const handleQuestionSetOrderSave = async () => {
     if (!activeQuestionSetId) return;
+    if (!questionOrderDirty) return;
+    setError("");
+    setSavingQuestionOrder(true);
+    setToastMessage("Saving…");
     try {
       await apiFetch(`/admin/question-sets/${activeQuestionSetId}/order`, {
         method: "POST",
@@ -365,8 +373,15 @@ function AdminDashboard({ onLogout }) {
         })
       });
       await loadQuestionSetQuestions(activeQuestionSetId);
+      setQuestionOrderDirty(false);
+      setToastMessage("Saved");
+      setTimeout(() => setToastMessage(""), 2500);
     } catch (err) {
       setError(err.message);
+      setToastMessage("Unable to save");
+      setTimeout(() => setToastMessage(""), 3500);
+    } finally {
+      setSavingQuestionOrder(false);
     }
   };
 
@@ -378,6 +393,7 @@ function AdminDashboard({ onLogout }) {
     event.preventDefault();
     const fromIndex = Number(event.dataTransfer.getData("text/plain"));
     if (Number.isNaN(fromIndex)) return;
+    setQuestionOrderDirty(true);
     setQuestionSetQuestions((prev) => {
       const next = [...prev];
       const [moved] = next.splice(fromIndex, 1);
@@ -1369,37 +1385,6 @@ function AdminDashboard({ onLogout }) {
                       }
                     />
                   </label>
-                  <div className="row">
-                    <label>
-                      Default Duration (optional)
-                      <input
-                        type="number"
-                        value={newQuestionSet.duration_minutes}
-                        onChange={(e) =>
-                          setNewQuestionSet({
-                            ...newQuestionSet,
-                            duration_minutes: e.target.value
-                          })
-                        }
-                      />
-                    </label>
-                    <label>
-                      Default Warning (optional)
-                      <input
-                        type="number"
-                        value={newQuestionSet.warning_minutes}
-                        onChange={(e) =>
-                          setNewQuestionSet({
-                            ...newQuestionSet,
-                            warning_minutes: e.target.value
-                          })
-                        }
-                      />
-                      <span className="subtle">
-                        Actual timing is configured per Test.
-                      </span>
-                    </label>
-                  </div>
                   <button type="submit">Create Set</button>
                 </form>
               </div>
@@ -1494,56 +1479,37 @@ function AdminDashboard({ onLogout }) {
                       }
                     />
                   </label>
-                  <div className="row">
-                    <label>
-                      Default Duration (optional)
-                      <input
-                        type="number"
-                        value={editQuestionSet.duration_minutes}
-                        onChange={(e) =>
-                          setEditQuestionSet({
-                            ...editQuestionSet,
-                            duration_minutes: e.target.value
-                          })
-                        }
-                      />
-                    </label>
-                    <label>
-                      Default Warning (optional)
-                      <input
-                        type="number"
-                        value={editQuestionSet.warning_minutes}
-                        onChange={(e) =>
-                          setEditQuestionSet({
-                            ...editQuestionSet,
-                            warning_minutes: e.target.value
-                          })
-                        }
-                      />
-                      <span className="subtle">
-                        Actual timing is configured per Test.
-                      </span>
-                    </label>
-                  </div>
                   <button type="submit">Update Set</button>
                 </form>
               )}
               <section className="question-management">
                 <div className="question-management-header">
                   <h3>Question Management</h3>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingQuestion(null);
-                      setQuestionEditorOpen(true);
-                      setNewQuestion({ title: "", body: "", sections: "" });
-                      setAnswerType("long_text");
-                      setAllowMultiple(false);
-                      setOptions([{ option_text: "", is_correct: false }]);
-                    }}
-                  >
-                    + Add Question
-                  </button>
+                  <div className="utility-actions">
+                    {questionOrderDirty && (
+                      <button
+                        type="button"
+                        onClick={handleQuestionSetOrderSave}
+                        disabled={savingQuestionOrder}
+                      >
+                        {savingQuestionOrder ? "Saving…" : "Save"}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => {
+                        setEditingQuestion(null);
+                        setQuestionEditorOpen(true);
+                        setNewQuestion({ title: "", body: "", sections: "" });
+                        setAnswerType("long_text");
+                        setAllowMultiple(false);
+                        setOptions([{ option_text: "", is_correct: false }]);
+                      }}
+                    >
+                      + New question
+                    </button>
+                  </div>
                 </div>
                 <div className="table question-table">
                   <div className="table-header">
@@ -1588,12 +1554,9 @@ function AdminDashboard({ onLogout }) {
                     </div>
                   ))}
                 </div>
-                <button type="button" onClick={handleQuestionSetOrderSave}>
-                  Save order
-                </button>
                 {(questionEditorOpen || editingQuestion) && (
                   <form onSubmit={handleCreateQuestion} className="split-form">
-                    <h3>{editingQuestion ? "Edit Question" : "Add Question"}</h3>
+                    <h3>{editingQuestion ? "Edit Question" : "New Question"}</h3>
                 <input
                   placeholder="Question title"
                   value={newQuestion.title}
@@ -1674,22 +1637,20 @@ function AdminDashboard({ onLogout }) {
                   <button type="submit">
                     {editingQuestion ? "Save changes" : "Add question"}
                   </button>
-                  {editingQuestion && (
-                    <button
-                      type="button"
-                      className="ghost"
-                      onClick={() => {
-                        setEditingQuestion(null);
-                        setQuestionEditorOpen(false);
-                        setNewQuestion({ title: "", body: "", sections: "" });
-                        setAnswerType("long_text");
-                        setAllowMultiple(false);
-                        setOptions([{ option_text: "", is_correct: false }]);
-                      }}
-                    >
-                      Cancel
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => {
+                      setEditingQuestion(null);
+                      setQuestionEditorOpen(false);
+                      setNewQuestion({ title: "", body: "", sections: "" });
+                      setAnswerType("long_text");
+                      setAllowMultiple(false);
+                      setOptions([{ option_text: "", is_correct: false }]);
+                    }}
+                  >
+                    Cancel
+                  </button>
                 </div>
                   </form>
                 )}
@@ -1916,6 +1877,18 @@ function CandidateSession() {
       return;
     }
     if (!allowEntry) {
+      // Rule: refresh/exit ends the attempt; mark session DONE server-side.
+      try {
+        const parsed = JSON.parse(stored);
+        if (parsed?.session_id) {
+          apiFetch("/candidate/abandon", {
+            method: "POST",
+            body: JSON.stringify({ session_id: parsed.session_id })
+          }).catch(() => {});
+        }
+      } catch (_) {
+        // Ignore malformed session payload.
+      }
       localStorage.removeItem("active_session");
       sessionStorage.setItem(
         "candidate_notice",

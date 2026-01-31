@@ -1294,13 +1294,10 @@ async def start_session(
         )
         existing_session = session_result.scalar_one_or_none()
         if existing_session and existing_session.status == SessionStatus.in_progress:
-            if existing_session.end_time and existing_session.end_time <= datetime.utcnow():
-                await auto_submit_session(db, existing_session)
-                await db.commit()
-                return JSONResponse(status_code=400, content={"error": "Session expired"})
-            return JSONResponse(
-                status_code=400, content={"error": "Session already in progress"}
-            )
+            # Rule: exiting/refreshing ends the attempt; re-entry is not allowed.
+            await auto_submit_session(db, existing_session)
+            await db.commit()
+            return JSONResponse(status_code=400, content={"error": "Session already used"})
         if existing_session and existing_session.status in {
             SessionStatus.submitted,
             SessionStatus.auto_submitted,
@@ -1416,7 +1413,10 @@ async def validate_session_code(
         existing_session = session_result.scalar_one_or_none()
         if existing_session:
             if existing_session.status == SessionStatus.in_progress:
-                return {"valid": False, "reason": "in_progress"}
+                # Rule: exiting/refreshing ends the attempt; re-entry is not allowed.
+                await auto_submit_session(db, existing_session)
+                await db.commit()
+                return {"valid": False, "reason": "used"}
             if existing_session.status in {
                 SessionStatus.submitted,
                 SessionStatus.auto_submitted,
@@ -1425,6 +1425,42 @@ async def validate_session_code(
                 return {"valid": False, "reason": "used"}
         return {"valid": True}
     except Exception as exc:  # noqa: BLE001
+        await db.rollback()
+        return JSONResponse(status_code=500, content={"error": str(exc)})
+
+
+@router.post("/candidate/abandon")
+async def abandon_session(
+    payload: SubmitRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role(RoleName.candidate)),
+):
+    """
+    Force-close a session as DONE (auto-submitted).
+
+    Used when the candidate exits/refreshes and is not allowed to re-enter.
+    """
+    try:
+        session_result = await db.execute(
+            select(TestSession).where(
+                TestSession.id == payload.session_id,
+                TestSession.user_id == current_user.id,
+            )
+        )
+        session = session_result.scalar_one_or_none()
+        if not session:
+            return JSONResponse(status_code=404, content={"error": "Session not found"})
+        if session.status in {
+            SessionStatus.submitted,
+            SessionStatus.auto_submitted,
+            SessionStatus.expired,
+        }:
+            return {"status": "ok"}
+        await auto_submit_session(db, session)
+        await db.commit()
+        return {"status": "abandoned"}
+    except Exception as exc:  # noqa: BLE001
+        await db.rollback()
         return JSONResponse(status_code=500, content={"error": str(exc)})
 
 
